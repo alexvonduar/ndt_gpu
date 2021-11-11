@@ -29,6 +29,12 @@ int main(int argc, char **argv)
         use_gpu = true;
     }
 
+    bool do_render = false;
+    if (argc == 5)
+    {
+        do_render = true;
+    }
+
     // Loading first scan of room.
     pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     if (pcl::io::loadPCDFile<pcl::PointXYZ>(argv[1], *target_cloud) == -1)
@@ -58,14 +64,14 @@ int main(int argc, char **argv)
 
     // Initializing Normal Distributions Transform (NDT).
     pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
-    //gpu::GNormalDistributionsTransform ndt;
+    // gpu::GNormalDistributionsTransform ndt;
 
     // Setting scale dependent NDT parameters
     // Setting minimum transformation difference for termination condition.
     ndt.setTransformationEpsilon(0.01);
     // Setting maximum step size for More-Thuente line search.
     ndt.setStepSize(0.1);
-    //Setting Resolution of NDT grid structure (VoxelGridCovariance).
+    // Setting Resolution of NDT grid structure (VoxelGridCovariance).
     ndt.setResolution(1.0);
 
     // Setting max number of registration iterations.
@@ -91,7 +97,7 @@ int main(int argc, char **argv)
     g_ndt.setTransformationEpsilon(0.01);
     // Setting maximum step size for More-Thuente line search.
     g_ndt.setStepSize(0.1);
-    //Setting Resolution of NDT grid structure (VoxelGridCovariance).
+    // Setting Resolution of NDT grid structure (VoxelGridCovariance).
     g_ndt.setResolution(1.0);
 
     // Setting max number of registration iterations.
@@ -122,7 +128,7 @@ int main(int argc, char **argv)
         // fitness_score = new_gpu_ndt_ptr->getFitnessScore();
         g_ndt.align(init_guess);
         final_trans = g_ndt.getFinalTransformation();
-        //final_trans = init_guess;
+        // final_trans = init_guess;
         converged = g_ndt.hasConverged();
         fitness_score = g_ndt.getFitnessScore();
     }
@@ -141,40 +147,43 @@ int main(int argc, char **argv)
     std::cout << "Normal Distributions Transform has converged:" << converged
               << " score: " << fitness_score << std::endl;
 
-    // Transforming unfiltered, input cloud using found transform.
-    pcl::transformPointCloud(*input_cloud, *output_cloud, final_trans);
-
-    // Saving transformed input cloud.
-    pcl::io::savePCDFileASCII("out.pcd", *output_cloud);
-
-    // Initializing point cloud visualizer
-    boost::shared_ptr<pcl::visualization::PCLVisualizer>
-        viewer_final(new pcl::visualization::PCLVisualizer("3D Viewer"));
-    viewer_final->setBackgroundColor(0, 0, 0);
-
-    // Coloring and visualizing target cloud (red).
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>
-        target_color(target_cloud, 255, 0, 0);
-    viewer_final->addPointCloud<pcl::PointXYZ>(target_cloud, target_color, "target cloud");
-    viewer_final->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-                                                   1, "target cloud");
-
-    // Coloring and visualizing transformed input cloud (green).
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>
-        output_color(output_cloud, 0, 255, 0);
-    viewer_final->addPointCloud<pcl::PointXYZ>(output_cloud, output_color, "output cloud");
-    viewer_final->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-                                                   1, "output cloud");
-
-    // Starting visualizer
-    viewer_final->addCoordinateSystem(1.0, "global");
-    viewer_final->initCameraParameters();
-
-    // Wait until visualizer window is closed.
-    while (!viewer_final->wasStopped())
+    if (do_render)
     {
-        viewer_final->spinOnce(100);
-        boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+        // Transforming unfiltered, input cloud using found transform.
+        pcl::transformPointCloud(*input_cloud, *output_cloud, final_trans);
+
+        // Saving transformed input cloud.
+        pcl::io::savePCDFileASCII("out.pcd", *output_cloud);
+
+        // Initializing point cloud visualizer
+        boost::shared_ptr<pcl::visualization::PCLVisualizer>
+            viewer_final(new pcl::visualization::PCLVisualizer("3D Viewer"));
+        viewer_final->setBackgroundColor(0, 0, 0);
+
+        // Coloring and visualizing target cloud (red).
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>
+            target_color(target_cloud, 255, 0, 0);
+        viewer_final->addPointCloud<pcl::PointXYZ>(target_cloud, target_color, "target cloud");
+        viewer_final->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+                                                       1, "target cloud");
+
+        // Coloring and visualizing transformed input cloud (green).
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ>
+            output_color(output_cloud, 0, 255, 0);
+        viewer_final->addPointCloud<pcl::PointXYZ>(output_cloud, output_color, "output cloud");
+        viewer_final->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+                                                       1, "output cloud");
+
+        // Starting visualizer
+        viewer_final->addCoordinateSystem(1.0, "global");
+        viewer_final->initCameraParameters();
+
+        // Wait until visualizer window is closed.
+        while (!viewer_final->wasStopped())
+        {
+            viewer_final->spinOnce(100);
+            boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+        }
     }
 
     return 0;
