@@ -24,13 +24,13 @@ int main(int argc, char **argv)
     }
 
     bool use_gpu = false;
-    if (argc == 4)
+    if (argc >= 4)
     {
         use_gpu = true;
     }
 
     bool do_render = false;
-    if (argc == 5)
+    if (argc >= 5)
     {
         do_render = true;
     }
