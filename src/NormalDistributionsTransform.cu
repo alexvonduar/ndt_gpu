@@ -752,10 +752,10 @@ double GNormalDistributionsTransform::computeDerivatives(Eigen::Matrix<double, 6
 	checkCudaErrors(cudaMalloc(&point_hessians, sizeof(double) * valid_points_num * 18 * 6));
 	checkCudaErrors(cudaMalloc(&score, sizeof(double) * valid_points_num));
 
-	checkCudaErrors(cudaMemset(gradients, 0, sizeof(double) * valid_points_num * 6));
-	checkCudaErrors(cudaMemset(hessians, 0, sizeof(double) * valid_points_num * 6 * 6));
-	checkCudaErrors(cudaMemset(point_gradients, 0, sizeof(double) * valid_points_num * 3 * 6));
-	checkCudaErrors(cudaMemset(point_hessians, 0, sizeof(double) * valid_points_num * 18 * 6));
+	//checkCudaErrors(cudaMemset(gradients, 0, sizeof(double) * valid_points_num * 6));
+	//checkCudaErrors(cudaMemset(hessians, 0, sizeof(double) * valid_points_num * 6 * 6));
+	//checkCudaErrors(cudaMemset(point_gradients, 0, sizeof(double) * valid_points_num * 3 * 6));
+	//checkCudaErrors(cudaMemset(point_hessians, 0, sizeof(double) * valid_points_num * 18 * 6));
 
 	int block_x = (valid_points_num > BLOCK_SIZE_X) ? BLOCK_SIZE_X : valid_points_num;
 
