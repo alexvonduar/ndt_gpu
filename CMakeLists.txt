@@ -17,26 +17,27 @@ if (CUDA_FOUND)
 		set(CUDA_CAPABILITY_VERSION_CHECKER
 			"${CATKIN_DEVEL_PREFIX}/lib/capability_version_checker")
   endif()
-  
+
   execute_process(
 	    COMMAND ${CUDA_CAPABILITY_VERSION_CHECKER}
 	    OUTPUT_VARIABLE CUDA_CAPABILITY_VERSION
 	    OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    
+
 	if("${CUDA_CAPABILITY_VERSION}" MATCHES "^[1-9][0-9]+$")
 	  set(CUDA_ARCH "sm_${CUDA_CAPABILITY_VERSION}")
 	else()
 	  set(CUDA_ARCH "sm_52")
 	endif()
-	
+
 	set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-arch=${CUDA_ARCH};-std=c++11;--ptxas-options=-v)
-	
+
 	set(SUBSYS_NAME ndt_gpu)
 	set(SUBSYS_DESC "Point cloud ndt gpu library")
 	set(SUBSYS_DEPS common)
 	set(LIB_NAME "fast_pcl_ndt_gpu")
-	
+	set(POOL_NAME "gpu_memory_pool")
+
 #	catkin_package(
 #  	DEPENDS ${SUBSYS_DEPS}
 #  	INCLUDE_DIRS include
@@ -58,7 +59,7 @@ if (CUDA_FOUND)
 		src/VoxelGrid.cu
 		src/SymmetricEigenSolver.cu
 	)
-	
+
 	set(incs
 	  include/fast_pcl/ndt_gpu/common.h
 	  include/fast_pcl/ndt_gpu/debug.h
@@ -70,27 +71,55 @@ if (CUDA_FOUND)
 	  include/fast_pcl/ndt_gpu/SymmetricEigenSolver.h
 	  include/fast_pcl/ndt_gpu/VoxelGrid.h
 	)
-	
+
+	set(pool_inc_dirs
+	include/fast_pcl/ndt_gpu)
+
 	cuda_add_library("${LIB_NAME}" ${srcs} ${incs})
-	
+
 	target_include_directories("${LIB_NAME}" PRIVATE
 		${CUDA_INCLUDE_DIRS}
+		${pool_inc_dirs}
 	)
-	
-	target_link_libraries("${LIB_NAME}" 
+
+	target_link_libraries("${LIB_NAME}"
 		${CUDA_LIBRARIES}
 		${CUDA_CUBLAS_LIBRARIES}
 		${CUDA_curand_LIBRARY})
 
+	set(pool_srcs
+		src/CUDADeviceMemoryPool.cpp
+	)
+
+	SET(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
+	add_library("${POOL_NAME}" SHARED ${pool_srcs})
+
+	target_include_directories("${POOL_NAME}" PRIVATE
+		${CUDA_INCLUDE_DIRS}
+		${pool_inc_dirs}
+	)
+
+	target_link_libraries("${POOL_NAME}"
+		${CUDA_LIBRARIES})
+
 	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ")
 	SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 
-	add_executable(test_node src/test_node.cpp)	
+	add_executable(test_node src/test_node.cpp)
 	#target_include_directories(test_node PRIVATE ${CUDA_INCLUDE_DIRS})
 	target_link_libraries(test_node
 		${LIB_NAME}
-		#${catkin_LIBRARIES} 
-  		${PCL_LIBRARIES} 
+		${POOL_NAME}
+		#${catkin_LIBRARIES}
+		${PCL_LIBRARIES}
+	)
+
+	add_executable(test_sequance src/test_sequance.cpp)
+	target_link_libraries(test_sequance
+		${LIB_NAME}
+		${POOL_NAME}
+		#${catkin_LIBRARIES}
+		${PCL_LIBRARIES}
 	)
 else()
 	message("fast_pcl ndt_gpu requires CUDA")
