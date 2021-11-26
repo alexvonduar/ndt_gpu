@@ -4,8 +4,6 @@
 #include <iostream>
 #include <pcl/common/transforms.h>
 
-#define USE_GPU_TEMP_CACHE_ 1
-
 namespace gpu {
 
 GNormalDistributionsTransform::GNormalDistributionsTransform()
@@ -40,10 +38,12 @@ GNormalDistributionsTransform::GNormalDistributionsTransform()
 
 	real_iterations_ = 0;
 
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
 	direvative_tmp_1_ = nullptr;
 	direvative_tmp_1_size_ = 0;
 	direvative_tmp_2_ = nullptr;
 	direvative_tmp_2_size_ = 0;
+#endif
 }
 
 GNormalDistributionsTransform::GNormalDistributionsTransform(const GNormalDistributionsTransform &other)
@@ -64,10 +64,12 @@ GNormalDistributionsTransform::GNormalDistributionsTransform(const GNormalDistri
 	real_iterations_ = other.real_iterations_;
 
 	voxel_grid_ = other.voxel_grid_;
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
 	direvative_tmp_1_ = nullptr;
 	direvative_tmp_1_size_ = 0;
 	direvative_tmp_2_ = nullptr;
 	direvative_tmp_2_size_ = 0;
+#endif
 }
 
 GNormalDistributionsTransform::~GNormalDistributionsTransform()
@@ -75,6 +77,7 @@ GNormalDistributionsTransform::~GNormalDistributionsTransform()
 	dj_ang_.memFree();
 	dh_ang_.memFree();
 
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
 	if (direvative_tmp_1_ != nullptr)
 	{
 		checkCudaErrors(cudaFree(direvative_tmp_1_));
@@ -88,6 +91,7 @@ GNormalDistributionsTransform::~GNormalDistributionsTransform()
 		direvative_tmp_2_ = nullptr;
 		direvative_tmp_2_size_ = 0;
 	}
+#endif
 }
 
 void GNormalDistributionsTransform::setStepSize(double step_size)

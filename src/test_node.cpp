@@ -26,13 +26,13 @@ int main(int argc, char **argv)
     bool use_gpu = false;
     if (argc >= 4)
     {
-        use_gpu = true;
+        use_gpu = atoi(argv[3]) ? true : false;
     }
 
     bool do_render = false;
     if (argc >= 5)
     {
-        do_render = true;
+        do_render = atoi(argv[4]) ? true : false;
     }
 
     // Loading first scan of room.

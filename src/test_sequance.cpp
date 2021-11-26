@@ -31,32 +31,37 @@ int main(int argc, char** argv)
     }
 
     // Loading first scan of room.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    if (pcl::io::loadPCDFile<pcl::PointXYZ>(argv[1], *target_cloud) == -1)
+    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> clouds;
+    //pcl::PointCloud<pcl::PointXYZ>::Ptr target_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    clouds.emplace_back(new pcl::PointCloud<pcl::PointXYZ>);
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(argv[1], *clouds.back()) == -1)
     {
         PCL_ERROR("Couldn't read file room_scan1.pcd \n");
         return (-1);
     }
-    std::cout << "Loaded " << target_cloud->size() << " data points from room_scan1.pcd" << std::endl;
+    std::cout << "Loaded " << clouds.back()->size() << " data points from room_scan1.pcd" << std::endl;
 
     // Loading second scan of room from new perspective.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    if (pcl::io::loadPCDFile<pcl::PointXYZ>(argv[2], *input_cloud) == -1)
+    //pcl::PointCloud<pcl::PointXYZ>::Ptr input_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    clouds.emplace_back(new pcl::PointCloud<pcl::PointXYZ>);
+    if (pcl::io::loadPCDFile<pcl::PointXYZ>(argv[2], *clouds.back()) == -1)
     {
         PCL_ERROR("Couldn't read file room_scan2.pcd \n");
         return (-1);
     }
-    std::cout << "Loaded " << input_cloud->size() << " data points from room_scan2.pcd" << std::endl;
+    std::cout << "Loaded " << clouds.back()->size() << " data points from room_scan2.pcd" << std::endl;
 
     double total_time = 0;
     auto it = n_iter;
+    int target_idx = 0;
+    int input_idx = 1;
     while (it--)
     {
         // Filtering input scan to roughly 10% of original size to increase speed of registration.
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::ApproximateVoxelGrid<pcl::PointXYZ> approximate_voxel_filter;
         approximate_voxel_filter.setLeafSize(0.2, 0.2, 0.2);
-        approximate_voxel_filter.setInputCloud(input_cloud);
+        approximate_voxel_filter.setInputCloud(clouds[input_idx]);
         approximate_voxel_filter.filter(*filtered_cloud);
         std::cout << "Filtered cloud contains " << filtered_cloud->size() << " data points from room_scan2.pcd" << std::endl;
 
@@ -76,7 +81,7 @@ int main(int argc, char** argv)
         // Setting point cloud to be aligned.
         g_ndt.setInputSource(filtered_cloud);
         // Setting point cloud to be aligned to.
-        g_ndt.setInputTarget(target_cloud);
+        g_ndt.setInputTarget(clouds[target_idx]);
 
         // Set initial alignment estimate found using robot odometry.
         Eigen::AngleAxisf init_rotation(0.6931, Eigen::Vector3f::UnitZ());
@@ -102,6 +107,8 @@ int main(int argc, char** argv)
 
         std::cout << "Normal Distributions Transform has converged:" << converged << " score: " << fitness_score
                 << std::endl;
+
+        std::swap(target_idx, input_idx);
     }
 
     if (n_iter > 0)

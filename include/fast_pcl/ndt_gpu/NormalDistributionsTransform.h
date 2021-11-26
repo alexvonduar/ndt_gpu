@@ -8,6 +8,8 @@
 #include "VoxelGrid.h"
 #include "Eigen/Geometry"
 
+#define USE_GPU_TEMP_CACHE_ 1
+
 namespace gpu {
 class GNormalDistributionsTransform: public GRegistration {
 public:
@@ -102,10 +104,12 @@ private:
 
 	GVoxelGrid voxel_grid_;
 
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
 	void * direvative_tmp_1_;
 	size_t direvative_tmp_1_size_;
 	void * direvative_tmp_2_;
 	size_t direvative_tmp_2_size_;
+#endif
 };
 }
 
