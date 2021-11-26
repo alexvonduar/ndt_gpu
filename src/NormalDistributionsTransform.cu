@@ -4,6 +4,8 @@
 #include <iostream>
 #include <pcl/common/transforms.h>
 
+#define USE_GPU_TEMP_CACHE_ 1
+
 namespace gpu {
 
 GNormalDistributionsTransform::GNormalDistributionsTransform()
@@ -37,6 +39,11 @@ GNormalDistributionsTransform::GNormalDistributionsTransform()
 	dh_ang_ = MatrixDevice(45, 1);
 
 	real_iterations_ = 0;
+
+	direvative_tmp_1_ = nullptr;
+	direvative_tmp_1_size_ = 0;
+	direvative_tmp_2_ = nullptr;
+	direvative_tmp_2_size_ = 0;
 }
 
 GNormalDistributionsTransform::GNormalDistributionsTransform(const GNormalDistributionsTransform &other)
@@ -57,6 +64,10 @@ GNormalDistributionsTransform::GNormalDistributionsTransform(const GNormalDistri
 	real_iterations_ = other.real_iterations_;
 
 	voxel_grid_ = other.voxel_grid_;
+	direvative_tmp_1_ = nullptr;
+	direvative_tmp_1_size_ = 0;
+	direvative_tmp_2_ = nullptr;
+	direvative_tmp_2_size_ = 0;
 }
 
 GNormalDistributionsTransform::~GNormalDistributionsTransform()
@@ -64,6 +75,19 @@ GNormalDistributionsTransform::~GNormalDistributionsTransform()
 	dj_ang_.memFree();
 	dh_ang_.memFree();
 
+	if (direvative_tmp_1_ != nullptr)
+	{
+		checkCudaErrors(cudaFree(direvative_tmp_1_));
+		direvative_tmp_1_ = nullptr;
+		direvative_tmp_1_size_ = 0;
+	}
+
+	if (direvative_tmp_2_ != nullptr)
+	{
+		checkCudaErrors(cudaFree(direvative_tmp_2_));
+		direvative_tmp_2_ = nullptr;
+		direvative_tmp_2_size_ = 0;
+	}
 }
 
 void GNormalDistributionsTransform::setStepSize(double step_size)
@@ -746,16 +770,39 @@ double GNormalDistributionsTransform::computeDerivatives(Eigen::Matrix<double, 6
 
 	double *gradients, *hessians, *point_gradients, *point_hessians, *score;
 
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
+    const auto gradients_size = valid_points_num * 6 * sizeof(double);
+	const auto hessians_size = valid_points_num * 6 * 6 * sizeof(double);
+	const auto point_gradients_size = valid_points_num * 3 * 6 * sizeof(double);
+	const auto point_hessians_size = valid_points_num * 18 * 6 * sizeof(double);
+	const auto score_size = valid_points_num * sizeof(double);
+	const auto total_size = gradients_size + hessians_size + point_gradients_size + point_hessians_size + score_size;
+	if (direvative_tmp_1_ == nullptr or direvative_tmp_1_size_ < total_size) {
+		if (direvative_tmp_1_ != nullptr) {
+			checkCudaErrors(cudaFree(direvative_tmp_1_));
+		}
+		checkCudaErrors(cudaMalloc(&direvative_tmp_1_, total_size));
+		direvative_tmp_1_size_ = total_size;
+	}
+	checkCudaErrors(cudaMemset(direvative_tmp_1_, 0, total_size));
+	gradients = (double *)direvative_tmp_1_;
+	hessians = gradients + valid_points_num * 6;
+	point_gradients = hessians + valid_points_num * 6 * 6;
+	point_hessians = point_gradients + valid_points_num * 3 * 6;
+	score = point_hessians + valid_points_num * 18 * 6;
+	//std::cout << "tmp buffer: " << direvative_tmp_1_ << std::endl;
+#else
 	checkCudaErrors(cudaMalloc(&gradients, sizeof(double) * valid_points_num * 6));
 	checkCudaErrors(cudaMalloc(&hessians, sizeof(double) * valid_points_num * 6 * 6));
 	checkCudaErrors(cudaMalloc(&point_gradients, sizeof(double) * valid_points_num * 3 * 6));
 	checkCudaErrors(cudaMalloc(&point_hessians, sizeof(double) * valid_points_num * 18 * 6));
 	checkCudaErrors(cudaMalloc(&score, sizeof(double) * valid_points_num));
 
-	//checkCudaErrors(cudaMemset(gradients, 0, sizeof(double) * valid_points_num * 6));
-	//checkCudaErrors(cudaMemset(hessians, 0, sizeof(double) * valid_points_num * 6 * 6));
-	//checkCudaErrors(cudaMemset(point_gradients, 0, sizeof(double) * valid_points_num * 3 * 6));
-	//checkCudaErrors(cudaMemset(point_hessians, 0, sizeof(double) * valid_points_num * 18 * 6));
+	checkCudaErrors(cudaMemset(gradients, 0, sizeof(double) * valid_points_num * 6));
+	checkCudaErrors(cudaMemset(hessians, 0, sizeof(double) * valid_points_num * 6 * 6));
+	checkCudaErrors(cudaMemset(point_gradients, 0, sizeof(double) * valid_points_num * 3 * 6));
+	checkCudaErrors(cudaMemset(point_hessians, 0, sizeof(double) * valid_points_num * 18 * 6));
+#endif
 
 	int block_x = (valid_points_num > BLOCK_SIZE_X) ? BLOCK_SIZE_X : valid_points_num;
 
@@ -811,16 +858,28 @@ double GNormalDistributionsTransform::computeDerivatives(Eigen::Matrix<double, 6
 
 
 	double *tmp_hessian;
-
-	checkCudaErrors(cudaMalloc(&tmp_hessian, sizeof(double) * valid_voxel_num * 6));
-
 	double *e_x_cov_x;
-
-	checkCudaErrors(cudaMalloc(&e_x_cov_x, sizeof(double) * valid_voxel_num));
-
 	double *cov_dxd_pi;
-
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
+    const auto tmp_hessian_size = sizeof(double) * valid_voxel_num * 6;
+	const auto e_x_cov_x_size = sizeof(double) * valid_voxel_num;
+	const auto cov_dxd_pi_size = sizeof(double) * valid_voxel_num * 3 * 6;
+	const auto tmp2_total_size = tmp_hessian_size + e_x_cov_x_size + cov_dxd_pi_size;
+	if (direvative_tmp_2_ == nullptr or direvative_tmp_2_size_ < tmp2_total_size) {
+		if(direvative_tmp_2_ != nullptr) {
+			checkCudaErrors(cudaFree(direvative_tmp_2_));
+		}
+		checkCudaErrors(cudaMalloc(&direvative_tmp_2_, tmp2_total_size));
+		direvative_tmp_2_size_ = tmp2_total_size;
+	}
+	tmp_hessian = (double *)direvative_tmp_2_;
+	e_x_cov_x = tmp_hessian + valid_voxel_num * 6;
+	cov_dxd_pi = e_x_cov_x + valid_voxel_num;
+#else
+	checkCudaErrors(cudaMalloc(&tmp_hessian, sizeof(double) * valid_voxel_num * 6));
+	checkCudaErrors(cudaMalloc(&e_x_cov_x, sizeof(double) * valid_voxel_num));
 	checkCudaErrors(cudaMalloc(&cov_dxd_pi, sizeof(double) * valid_voxel_num * 3 * 6));
+#endif
 
 	computeExCovX<<<grid_x, block_x>>>(trans_x, trans_y, trans_z, valid_points,
 										starting_voxel_id, voxel_id, valid_points_num,
@@ -948,6 +1007,8 @@ double GNormalDistributionsTransform::computeDerivatives(Eigen::Matrix<double, 6
 
 	checkCudaErrors(cudaMemcpy(&score_inc, score, sizeof(double), cudaMemcpyDeviceToHost));
 
+#if defined(USE_GPU_TEMP_CACHE_) and USE_GPU_TEMP_CACHE_
+#else
 	checkCudaErrors(cudaFree(gradients));
 	checkCudaErrors(cudaFree(hessians));
 	checkCudaErrors(cudaFree(point_hessians));
@@ -958,6 +1019,7 @@ double GNormalDistributionsTransform::computeDerivatives(Eigen::Matrix<double, 6
 
 	checkCudaErrors(cudaFree(e_x_cov_x));
 	checkCudaErrors(cudaFree(cov_dxd_pi));
+#endif
 
 	if (valid_points != NULL)
 		checkCudaErrors(cudaFree(valid_points));

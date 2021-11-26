@@ -101,6 +101,11 @@ private:
 
 
 	GVoxelGrid voxel_grid_;
+
+	void * direvative_tmp_1_;
+	size_t direvative_tmp_1_size_;
+	void * direvative_tmp_2_;
+	size_t direvative_tmp_2_size_;
 };
 }
 
